@@ -1,0 +1,255 @@
+#!/bin/bash
+#jquantri@moon.scs.ryerson.ca
+#Quantrill, Jason
+#501036139
+#Section 6
+
+function initialize_game    #takes in input file as argument
+{
+   if ! [ -f "$1" -a -r "$1" ]
+   then
+      echo "input file missing or unreadable" >/dev/stderr
+      exit 1
+   fi
+
+   if ! [ $(wc -l < "$1") == 6 ]
+   then
+      echo "input file must have 6 lines" >/dev/stderr
+      exit 2
+   fi
+
+   read seed < $1
+   RANDOM=$seed
+   if ! [[ $seed =~ ^[0-9]+$ ]]
+   then
+      echo "seed line format error" >/dev/stderr
+      exit 3
+   fi
+
+   arrayify_linux_card $1
+
+   for j in {0..4}; do
+      for i in {0..4}; do
+         if ! [[ "${numbers[$i,$j]}" =~ ^[0-9]+$ ]]; then
+            echo "card format error" >/dev/stderr
+            exit 4
+         elif [ $j == 2 ] && [ $i == 2 ]; then
+            continue
+         elif ! { [ "${numbers[$i,$j]}" -ge $(( 1 + (15 * $j))) ] && [ "${numbers[$i,$j]}" -le $(( 15 + (15 * $j))) ]; }
+         then
+            echo "card format error" >/dev/stderr
+            exit 4
+         fi
+      done
+   done
+
+   numbers_dup_check
+   check_middle
+
+   for m in {2..6}; do
+      local line=$(sed "${m}q;d" $1)
+      if [ ${#line} != 14 ]; then
+         echo "card format error" >/dev/stderr
+         exit 4
+      fi
+      line="$(echo "${line}" | cut -c3,6,9,12)"
+      if ! [ "${line}" == "    " ]; then
+         echo "card format error" >/dev/stderr
+         exit 4
+      fi
+   done
+}
+
+function numbers_dup_check
+{
+   if [[ $( awk -v RS=" " ' a[$0]++ ' <<< "${numbers[@]} " ) ]]; then
+      echo "card format error" >/dev/stderr
+      exit 4
+   fi
+}
+
+
+function check_for_LINUX
+{
+   local number=00
+   for i in {0..4}; do
+      number=${numbers[$i,0]}
+      if [[ "${number: -1}" == "m" ]]; then
+         number=${numbers[$i,1]}
+         if [[ "${number: -1}" == "m" ]]; then
+            number=${numbers[$i,2]}
+            if [[ "${number: -1}" == "m" ]]; then
+               number=${numbers[$i,3]}
+               if [[ "${number: -1}" == "m" ]]; then
+                  number=${numbers[$i,4]}
+                  if [[ "${number: -1}" == "m" ]]; then
+                     winner=true
+   fi; fi; fi; fi; fi
+   done
+
+   for j in {0..4}; do
+      number=${numbers[0,$j]}
+      if [[ "${number: -1}" == "m" ]]; then
+         number=${numbers[1,$j]}
+         if [[ "${number: -1}" == "m" ]]; then
+            number=${numbers[2,$j]}
+            if [[ "${number: -1}" == "m" ]]; then
+               number=${numbers[3,$j]}
+               if [[ "${number: -1}" == "m" ]]; then
+                  number=${numbers[4,$j]}
+                  if [[ "${number: -1}" == "m" ]]; then
+                     winner=true
+   fi; fi; fi; fi; fi
+   done
+
+   number=${numbers[0,0]}
+   if [[ "${number: -1}" == "m" ]]; then
+      number=${numbers[0,4]}
+      if [[ "${number: -1}" == "m" ]]; then
+         number=${numbers[4,0]}
+         if [[ "${number: -1}" == "m" ]]; then
+            number=${numbers[4,4]}
+            if [[ "${number: -1}" == "m" ]]; then
+               winner=true
+   fi; fi; fi; fi;
+}
+
+
+function display_card
+{
+   clear
+   local card_output="CALL LIST: "
+   for t in ${call_list[@]}
+   do
+      card_output="${card_output}$t "
+   done
+   card_output="${card_output}\n L   I   N   U   X\n"
+
+   for i in {0..4}
+   do
+      for j in {0..4}
+      do
+         card_output="${card_output}${numbers[$i,$j]} "
+         if [ "${card_output: -2}" != "m " ]
+         then
+            card_output="${card_output} "
+         fi
+      done
+   card_output="${card_output}\n"
+   done
+
+   printf "${card_output}"
+}
+
+function arrayify_linux_card #requires the input file as arg
+{
+   for i in {2..6}
+   do
+      for j in {0..4}
+      do
+         numbers[$(($i-2)),$j]=$((sed "${i}q;d" $1) | cut -c$((1+3*${j}))-$((2+3*${j})))
+      done
+   done
+}
+
+function get_next_number
+{
+   if [[ ${#call_list[@]} -eq 0 ]]; then
+      get_random_number
+   else
+      local previous_call=${call_list[-1]}
+      while [[ "${previous_call}" == "${call_list[-1]}" ]]; do
+         get_random_number
+      done
+   fi
+}
+
+function get_random_number
+{
+   local next_num=$(((RANDOM % 75) + 1))
+
+   if [ $next_num -lt 10 ]
+   then
+      next_num="0${next_num}"
+   fi
+
+   if [ $next_num -lt 16 ]
+   then
+      next_num="L${next_num}"
+   elif [ $next_num -lt 31 ]
+   then
+      next_num="I${next_num}"
+   elif [ $next_num -lt 46 ]
+   then
+      next_num="N${next_num}"
+   elif [ $next_num -lt 61 ]
+   then
+      next_num="U${next_num}"
+   else
+      next_num="X${next_num}"
+   fi
+
+   if [[ ! " ${call_list[*]} " =~ " ${next_num} " ]]; then
+      call_list+=($next_num)
+   fi
+}
+
+function check_card   #takes in the last number called (last element of call_list array) as argument
+{
+   local number=$1
+   number=${number:1}
+   for i in {0..4}
+   do
+      for j in {0..4}
+      do
+         if [ ${numbers[$i,$j]} == $number ]
+         then
+            numbers[$i,$j]="${numbers[$i,$j]}m"
+            break
+         fi
+      done
+   done
+}
+
+function check_middle
+{
+   if [[ "${numbers[2,2]}" == "00" ]]; then
+      numbers[2,2]="${numbers[2,2]}m"
+   else
+      echo "card format error" >/dev/stderr
+      exit 4
+   fi
+}
+
+
+
+
+declare -A numbers
+call_list=()
+winner=false
+user_in="user input"
+
+initialize_game $1
+display_card
+read -p "Any key to get next number; "q" to quit; " user_in
+
+while [[ $user_in != q ]] && [[ $winner != true ]]
+do
+   get_next_number
+   check_card "${call_list[-1]}"
+   display_card
+   check_for_LINUX
+
+   if [[ $winner != true ]]; then
+      read -p "Any key to get next number; "q" to quit; " user_in
+   fi
+done
+
+if [[ $winner == true ]]; then
+   display_card
+   printf "\nWINNER\n\n"
+else
+   printf "\nThanks for playing!\n\n"
+fi
+exit 0
+
